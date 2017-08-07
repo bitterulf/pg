@@ -1,0 +1,54 @@
+<html>
+    <head>
+        <script src="//unpkg.com/mithril/mithril.js"></script>
+        <script src="/js/store.js"></script>
+        <script src="/primus/primus.js"></script>
+        <style>
+            body {
+                background-color: grey;
+            }
+        </style>
+        <script>
+            const primus = Primus.connect();
+
+            const state = {
+                userId: store.get('userId'),
+                loggedIn: false
+            };
+
+            const App = {
+                view: function() {
+                    if (!state.userId) {
+                        return m('button', {onclick: function() {
+                            primus.emit('requestUserId');
+                        }}, 'createUser');
+                    }
+                    else if (!state.loggedIn) {
+                        return m('button', {onclick: function() {
+                            primus.emit('login', state.userId);
+                        }}, 'login');
+                    }
+
+                    return m('div', state.userId);
+                }
+            };
+
+            primus.on('newUserId', function message(userId) {
+                state.userId = userId;
+                store.set('userId', userId);
+                m.redraw();
+            });
+            primus.on('loggedIn', function message() {
+                state.loggedIn = true;
+                m.redraw();
+            });
+        </script>
+        <title>pg</title>
+    </head>
+    <body>
+        <div id='app'></div>
+        <script>
+            m.mount(document.querySelector('#app'), App)
+        </script>
+    </body>
+</html>
