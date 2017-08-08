@@ -7,6 +7,9 @@ const Hapi = require('hapi');
 const Inert = require('inert');
 const generateId = require('shortid').generate;
 
+const Datastore = require('nedb')
+const userDB = new Datastore({ filename: './db/user', autoload: true });
+
 const server = new Hapi.Server({
     connections: {
         routes: {
@@ -46,11 +49,22 @@ primus.plugin('emit', require('primus-emit'));
 
 primus.on('connection', function (spark) {
     spark.on('requestUserId', function () {
-        spark.emit('newUserId', generateId())
+        const userId = generateId();
+
+        userDB.insert({userId: userId}, function (err, newDoc) {
+            spark.emit('newUserId', userId);
+        });
     });
     spark.on('login', function (userId) {
-        console.log('user logged in:', userId);
-        spark.emit('loggedIn');
+        userDB.findOne({ userId: userId }, function (err, doc) {
+            if (!doc) {
+                return spark.emit('wrongUserId');
+            }
+
+            spark.user = doc;
+
+            spark.emit('loggedIn');
+        });
     });
 });
 
@@ -61,4 +75,20 @@ server.start((err) => {
     }
 
     console.log('Server running at:', server.info.uri);
+
+    setInterval(function() {
+        let users = 0;
+        let guests = 0;
+
+        primus.forEach(function(spark) {
+            if (spark.user) {
+                users++;
+            } else {
+                guests++;
+            }
+        });
+
+        console.log('connected guests:', guests);
+        console.log('connected users:', users);
+    }, 10000);
 });

@@ -42,6 +42,10 @@
                 state.loggedIn = true;
                 m.redraw();
             });
+            primus.on('wrongUserId', function message() {
+                alert('wrong user id');
+                store.set('userId');
+            });
         </script>
         <title>pg</title>
     </head>
