@@ -13,7 +13,8 @@
 
             const state = {
                 userId: store.get('userId'),
-                loggedIn: false
+                user: null,
+                game: null
             };
 
             const App = {
@@ -23,13 +24,28 @@
                             primus.emit('requestUserId');
                         }}, 'createUser');
                     }
-                    else if (!state.loggedIn) {
+                    else if (!state.user) {
                         return m('button', {onclick: function() {
                             primus.emit('login', state.userId);
                         }}, 'login');
                     }
+                    else if (!state.game) {
+                        return m('button', {onclick: function() {
+                            primus.emit('createGame');
+                        }}, 'create game');
+                    }
 
-                    return m('div', state.userId);
+                    const gameOwner = state.game.userId == state.user.userId;
+
+                    return m('div', [
+                        m('h1', 'game'),
+                        m('h2', state.game.joinToken),
+                        m('h2', 'players: ' + state.game.players.length),
+                        m('div', state.game.players.map(function(playerId) {
+                            return m('div', playerId);
+                        })),
+                        gameOwner ? m('button', { onclick: function() { primus.emit('closeGame'); } }, 'close game') : ''
+                    ]);
                 }
             };
 
@@ -38,13 +54,20 @@
                 store.set('userId', userId);
                 m.redraw();
             });
-            primus.on('loggedIn', function message() {
-                state.loggedIn = true;
+            primus.on('loggedIn', function message(user) {
+                state.user = user;
                 m.redraw();
             });
             primus.on('wrongUserId', function message() {
                 alert('wrong user id');
                 store.set('userId');
+            });
+            primus.on('alreadyInGame', function message() {
+                alert('alreadyInGame!');
+            });
+            primus.on('updateGame', function message(game) {
+                state.game = game;
+                m.redraw();
             });
         </script>
         <title>pg</title>

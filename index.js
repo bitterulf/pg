@@ -9,6 +9,7 @@ const generateId = require('shortid').generate;
 
 const Datastore = require('nedb')
 const userDB = new Datastore({ filename: './db/user', autoload: true });
+const gameDB = new Datastore({ filename: './db/game', autoload: true });
 
 const server = new Hapi.Server({
     connections: {
@@ -55,6 +56,38 @@ primus.on('connection', function (spark) {
             spark.emit('newUserId', userId);
         });
     });
+    spark.on('createGame', function () {
+        if (!spark.user) {
+            return;
+        }
+
+        gameDB.findOne({ userId: spark.user.userId }, function (err, doc) {
+            if (doc) {
+                return spark.emit('alreadyInGame');
+            }
+
+            const joinToken = generateId();
+
+            gameDB.insert({userId: spark.user.userId, joinToken: joinToken, players: [spark.user.userId] }, function (err, newDoc) {
+                spark.emit('updateGame', newDoc);
+            });
+        });
+    });
+    spark.on('closeGame', function () {
+        if (!spark.user) {
+            return;
+        }
+
+        gameDB.findOne({ userId: spark.user.userId }, function (err, doc) {
+            if (!doc) {
+                return;
+            }
+
+            gameDB.remove({userId: spark.user.userId }, function (err) {
+                spark.emit('updateGame', null);
+            });
+        });
+    });
     spark.on('login', function (userId) {
         userDB.findOne({ userId: userId }, function (err, doc) {
             if (!doc) {
@@ -63,7 +96,13 @@ primus.on('connection', function (spark) {
 
             spark.user = doc;
 
-            spark.emit('loggedIn');
+            spark.emit('loggedIn', doc);
+
+            gameDB.findOne({ userId: spark.user.userId }, function (err, doc) {
+                if (doc) {
+                    return spark.emit('updateGame', doc);
+                }
+            });
         });
     });
 });
