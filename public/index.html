@@ -30,9 +30,15 @@
                         }}, 'login');
                     }
                     else if (!state.game) {
-                        return m('button', {onclick: function() {
-                            primus.emit('createGame');
-                        }}, 'create game');
+                        return m('div', [
+                            m('button', {onclick: function() {
+                                primus.emit('createGame');
+                            }}, 'create game'),
+                            m('button', {onclick: function() {
+                                const token = prompt('Please insert join token:');
+                                primus.emit('joinGame', token);
+                            }}, 'join game')
+                        ]);
                     }
 
                     const gameOwner = state.game.userId == state.user.userId;

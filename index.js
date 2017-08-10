@@ -73,6 +73,28 @@ primus.on('connection', function (spark) {
             });
         });
     });
+    spark.on('joinGame', function (token) {
+        // check if not allready in a game!
+        if (!spark.user) {
+            return;
+        }
+
+        gameDB.findOne({ joinToken: token }, function (err, doc) {
+            if (doc) {
+                if (doc.players.indexOf(spark.user.userId) < 0) {
+                    gameDB.update({ joinToken: token }, { $push: { players: spark.user.userId } }, {}, function (err, changes) {
+                        gameDB.findOne({ joinToken: token }, function (err, doc) {
+                            primus.forEach(function(spark) {
+                                if (doc.players.indexOf[spark.user.userId] > -1) {
+                                    spark.emit('updateGame', doc);
+                                }
+                            });
+                        });
+                    });
+                }
+            }
+        });
+    });
     spark.on('closeGame', function () {
         if (!spark.user) {
             return;
