@@ -47,7 +47,12 @@ server.route({
 
 const games = {
     game1: {
+        minPlayers: 2,
         maxPlayers: 2
+    },
+    game2: {
+        minPlayers: 1,
+        maxPlayers: 1
     }
 };
 
@@ -78,7 +83,7 @@ primus.on('connection', function (spark) {
 
             const joinToken = generateId();
 
-            gameDB.insert({userId: spark.user.userId, type: type, maxPlayers: games[type].maxPlayers, joinToken: joinToken, players: [spark.user.userId] }, function (err, newDoc) {
+            gameDB.insert({userId: spark.user.userId, type: type, running: false, maxPlayers: games[type].maxPlayers, minPlayers: games[type].minPlayers, joinToken: joinToken, players: [spark.user.userId] }, function (err, newDoc) {
                 spark.emit('updateGame', newDoc);
             });
         });
@@ -97,6 +102,8 @@ primus.on('connection', function (spark) {
                             const players = doc.players;
 
                             primus.forEach(function(spark) {
+                                if (!spark.user) return;
+
                                 if (players.indexOf(spark.user.userId) > -1) {
                                     spark.emit('updateGame', doc);
                                 }
@@ -107,6 +114,35 @@ primus.on('connection', function (spark) {
             }
         });
     });
+
+    spark.on('startGame', function () {
+        if (!spark.user) {
+            return;
+        }
+
+        gameDB.findOne({ userId: spark.user.userId }, function (err, doc) {
+            if (!doc || doc.running == true) {
+                return;
+            }
+
+            const players = doc.players;
+
+            gameDB.update({ userId: spark.user.userId }, { $set: { running: true } }, {}, function (err, doc) {
+                gameDB.findOne({ userId: spark.user.userId }, function (err, doc) {
+                    if (doc) {
+                        primus.forEach(function(spark) {
+                            if (!spark.user) return;
+
+                            if (players.indexOf(spark.user.userId) > -1) {
+                                spark.emit('updateGame', doc);
+                            }
+                        });
+                    }
+                });
+            });
+        });
+    });
+
     spark.on('closeGame', function () {
         if (!spark.user) {
             return;
@@ -121,6 +157,8 @@ primus.on('connection', function (spark) {
 
             gameDB.remove({userId: spark.user.userId }, function (err) {
                 primus.forEach(function(spark) {
+                    if (!spark.user) return;
+
                     if (players.indexOf(spark.user.userId) > -1) {
                         spark.emit('updateGame', null);
                     }

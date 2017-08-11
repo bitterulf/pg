@@ -33,7 +33,10 @@
                         return m('div', [
                             m('button', {onclick: function() {
                                 primus.emit('createGame', 'game1');
-                            }}, 'create game'),
+                            }}, 'create game1'),
+                            m('button', {onclick: function() {
+                                primus.emit('createGame', 'game2');
+                            }}, 'create game2'),
                             m('button', {onclick: function() {
                                 const token = prompt('Please insert join token:');
                                 primus.emit('joinGame', token);
@@ -42,15 +45,35 @@
                     }
 
                     const gameOwner = state.game.userId == state.user.userId;
+                    const ready = state.game.players.length >= state.game.minPlayers;
+                    const running = state.game.running;
 
                     return m('div', [
-                        m('h1', 'game'),
+                        m('h1', 'game ' + (running ? 'running' : '') ),
                         m('h2', state.game.joinToken),
-                        m('h2', 'players: ' + state.game.players.length + '/' + state.game.maxPlayers),
-                        m('div', state.game.players.map(function(playerId) {
-                            return m('div', playerId);
+                        m('h2', 'players: ' + state.game.players.length + '/ min: ' + state.game.minPlayers + ' max: ' + state.game.maxPlayers),
+                        m('div', state.game.players.map(function(playerId, index) {
+                            const spectator = index > state.game.maxPlayers - 1;
+
+                            if (gameOwner) {
+                                return m('div', [
+                                    m('div', playerId),
+                                    m('button', { onclick: function() { primus.emit('movePlayerDown', playerId); } }, 'move down')
+                                ]);
+                            }
+
+                            if (spectator) {
+                                return m('div', [
+                                    m('div', playerId + ' (spectator)')
+                                ]);
+                            }
+
+                            return m('div', [
+                                m('div', playerId)
+                            ]);
                         })),
-                        gameOwner ? m('button', { onclick: function() { primus.emit('closeGame'); } }, 'close game') : ''
+                        gameOwner && !running && ready ? m('button', { onclick: function() { primus.emit('startGame'); } }, 'start game') : '',
+                        gameOwner && !running ? m('button', { onclick: function() { primus.emit('closeGame'); } }, 'close game') : ''
                     ]);
                 }
             };
@@ -72,6 +95,7 @@
                 alert('alreadyInGame!');
             });
             primus.on('updateGame', function message(game) {
+                console.log('gameUpdate', game);
                 state.game = game;
                 m.redraw();
             });
