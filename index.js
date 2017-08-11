@@ -84,8 +84,10 @@ primus.on('connection', function (spark) {
                 if (doc.players.indexOf(spark.user.userId) < 0) {
                     gameDB.update({ joinToken: token }, { $push: { players: spark.user.userId } }, {}, function (err, changes) {
                         gameDB.findOne({ joinToken: token }, function (err, doc) {
+                            const players = doc.players;
+
                             primus.forEach(function(spark) {
-                                if (doc.players.indexOf[spark.user.userId] > -1) {
+                                if (players.indexOf(spark.user.userId) > -1) {
                                     spark.emit('updateGame', doc);
                                 }
                             });
@@ -105,8 +107,14 @@ primus.on('connection', function (spark) {
                 return;
             }
 
+            const players = doc.players;
+
             gameDB.remove({userId: spark.user.userId }, function (err) {
-                spark.emit('updateGame', null);
+                primus.forEach(function(spark) {
+                    if (players.indexOf(spark.user.userId) > -1) {
+                        spark.emit('updateGame', null);
+                    }
+                });
             });
         });
     });
