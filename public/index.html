@@ -32,7 +32,7 @@
                     else if (!state.game) {
                         return m('div', [
                             m('button', {onclick: function() {
-                                primus.emit('createGame');
+                                primus.emit('createGame', 'game1');
                             }}, 'create game'),
                             m('button', {onclick: function() {
                                 const token = prompt('Please insert join token:');
@@ -46,7 +46,7 @@
                     return m('div', [
                         m('h1', 'game'),
                         m('h2', state.game.joinToken),
-                        m('h2', 'players: ' + state.game.players.length),
+                        m('h2', 'players: ' + state.game.players.length + '/' + state.game.maxPlayers),
                         m('div', state.game.players.map(function(playerId) {
                             return m('div', playerId);
                         })),

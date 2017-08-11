@@ -45,6 +45,12 @@ server.route({
     }
 });
 
+const games = {
+    game1: {
+        maxPlayers: 2
+    }
+};
+
 const primus = new Primus(server.listener);
 primus.plugin('emit', require('primus-emit'));
 
@@ -56,8 +62,12 @@ primus.on('connection', function (spark) {
             spark.emit('newUserId', userId);
         });
     });
-    spark.on('createGame', function () {
+    spark.on('createGame', function (type) {
         if (!spark.user) {
+            return;
+        }
+
+        if (!games[type]) {
             return;
         }
 
@@ -68,7 +78,7 @@ primus.on('connection', function (spark) {
 
             const joinToken = generateId();
 
-            gameDB.insert({userId: spark.user.userId, joinToken: joinToken, players: [spark.user.userId] }, function (err, newDoc) {
+            gameDB.insert({userId: spark.user.userId, type: type, maxPlayers: games[type].maxPlayers, joinToken: joinToken, players: [spark.user.userId] }, function (err, newDoc) {
                 spark.emit('updateGame', newDoc);
             });
         });
