@@ -48,11 +48,24 @@ server.route({
 const games = {
     game1: {
         minPlayers: 2,
-        maxPlayers: 2
+        maxPlayers: 2,
+        logic: function(game, playerId, action) {
+        }
     },
     game2: {
         minPlayers: 1,
-        maxPlayers: 1
+        maxPlayers: 1,
+        logic: function(game, playerId, action) {
+            if (!game.messages) {
+                game.messages = [];
+            }
+
+            if (action == 'dice') {
+                game.messages.push(playerId + ' rolled the dice ');
+            }
+
+            return game;
+        }
     }
 };
 
@@ -96,6 +109,10 @@ primus.on('connection', function (spark) {
 
         gameDB.findOne({ joinToken: token }, function (err, doc) {
             if (doc) {
+                if (!doc || doc.running == true) {
+                    return;
+                }
+
                 if (doc.players.indexOf(spark.user.userId) < 0) {
                     gameDB.update({ joinToken: token }, { $push: { players: spark.user.userId } }, {}, function (err, changes) {
                         gameDB.findOne({ joinToken: token }, function (err, doc) {
@@ -127,7 +144,7 @@ primus.on('connection', function (spark) {
 
             const players = doc.players;
 
-            gameDB.update({ userId: spark.user.userId }, { $set: { running: true } }, {}, function (err, doc) {
+            gameDB.update({ userId: spark.user.userId }, { $set: { running: true, currentPlayer: 0 } }, {}, function (err, doc) {
                 gameDB.findOne({ userId: spark.user.userId }, function (err, doc) {
                     if (doc) {
                         primus.forEach(function(spark) {
@@ -180,6 +197,37 @@ primus.on('connection', function (spark) {
                 if (doc) {
                     return spark.emit('updateGame', doc);
                 }
+            });
+        });
+    });
+    spark.on('action', function (gameId, action) {
+        if (!spark.user) {
+            return;
+        }
+
+        gameDB.findOne({ _id: gameId }, function (err, doc) {
+            if (!doc) {
+                return;
+            }
+
+            const playerIndex = doc.players.indexOf(spark.user.userId);
+
+            if (playerIndex != doc.currentPlayer) {
+                return;
+            }
+
+            if (!games[doc.type]) {
+                return;
+            }
+
+            doc = games[doc.type].logic(doc, spark.user.userId, action);
+
+            gameDB.update({ _id: gameId }, doc, {}, function (err, doc) {
+                gameDB.findOne({ _id: gameId }, function (err, doc) {
+                    if (doc) {
+                        return spark.emit('updateGame', doc);
+                    }
+                });
             });
         });
     });

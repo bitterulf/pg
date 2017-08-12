@@ -47,15 +47,17 @@
                     const gameOwner = state.game.userId == state.user.userId;
                     const ready = state.game.players.length >= state.game.minPlayers;
                     const running = state.game.running;
+                    const playersTurn = state.game.players[state.game.currentPlayer] == state.user.userId;
 
                     return m('div', [
                         m('h1', 'game ' + (running ? 'running' : '') ),
+                        m('h2', 'you are: ' + state.game.userId),
                         m('h2', state.game.joinToken),
                         m('h2', 'players: ' + state.game.players.length + '/ min: ' + state.game.minPlayers + ' max: ' + state.game.maxPlayers),
                         m('div', state.game.players.map(function(playerId, index) {
                             const spectator = index > state.game.maxPlayers - 1;
 
-                            if (gameOwner) {
+                            if (gameOwner && !running) {
                                 return m('div', [
                                     m('div', playerId),
                                     m('button', { onclick: function() { primus.emit('movePlayerDown', playerId); } }, 'move down')
@@ -68,12 +70,19 @@
                                 ]);
                             }
 
+                            if (state.game.currentPlayer == index) {
+                                return m('div', [
+                                    m('div', '<'+playerId+'>')
+                                ]);
+                            }
+
                             return m('div', [
                                 m('div', playerId)
                             ]);
                         })),
                         gameOwner && !running && ready ? m('button', { onclick: function() { primus.emit('startGame'); } }, 'start game') : '',
-                        gameOwner && !running ? m('button', { onclick: function() { primus.emit('closeGame'); } }, 'close game') : ''
+                        gameOwner && !running ? m('button', { onclick: function() { primus.emit('closeGame'); } }, 'close game') : '',
+                        playersTurn ? m('button', { onclick: function() { primus.emit('action', state.game._id, 'dice'); } }, 'dice') : ''
                     ]);
                 }
             };
