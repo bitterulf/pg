@@ -1,5 +1,6 @@
 'use strict';
 
+const async = require('async');
 const Primus = require('primus');
 
 const Path = require('path');
@@ -8,8 +9,97 @@ const Inert = require('inert');
 const generateId = require('shortid').generate;
 
 const Datastore = require('nedb')
+
 const userDB = new Datastore({ filename: './db/user', autoload: true });
 const gameDB = new Datastore({ filename: './db/game', autoload: true });
+
+const DB = {
+    user: userDB,
+    game: gameDB
+};
+
+const app = function(DB) {
+    return {
+        with: function(spark) {
+            return {
+                on: function(eventName) {
+                    const steps= [];
+
+                    const api = {
+                        findUser: function(selector, fn) {
+                            steps.push({
+                                action: 'findUser',
+                                selector: selector,
+                                fn: fn
+                            })
+
+                            return api;
+                        },
+                        findGame: function(selector, fn) {
+                            steps.push({
+                                action: 'findGame',
+                                selector: selector,
+                                fn: fn
+                            })
+
+                            return api;
+                        },
+                        sendEvent: function(fn) {
+                            steps.push({
+                                action: 'sendEvent',
+                                fn: fn
+                            })
+
+                            return api;
+                        },
+                        end: function() {
+                            console.log('this is the end');
+
+                            const context = {
+
+                            };
+
+                            async.mapSeries(
+                                steps,
+                                function(step, cb) {
+                                    if (step.action == 'findUser') {
+                                        DB.user.findOne(step.selector.apply(context), function (err, doc) {
+                                            step.fn.apply(context, [doc]);
+                                            cb();
+                                        });
+                                    }
+                                    else if (step.action == 'findGame') {
+                                        DB.game.findOne(step.selector.apply(context), function (err, doc) {
+                                            step.fn.apply(context, [doc]);
+                                            cb();
+                                        });
+                                    }
+                                    else if (step.action == 'sendEvent') {
+                                        step.fn.call(context, function(event, data) {
+                                            console.log('there we go lad', event, data);
+                                            spark.emit(event, data)
+                                        });
+                                        cb();
+                                    }
+                                    else {
+                                        cb();
+                                    }
+                                },
+                                function() {
+                                    console.log('chain executed');
+                                }
+                            );
+
+                            // run async stuff after another
+                        }
+                    }
+
+                    return api;
+                }
+            }
+        }
+    }
+};
 
 const server = new Hapi.Server({
     connections: {
@@ -183,22 +273,44 @@ primus.on('connection', function (spark) {
             });
         });
     });
+
     spark.on('login', function (userId) {
-        userDB.findOne({ userId: userId }, function (err, doc) {
-            if (!doc) {
-                return spark.emit('wrongUserId');
-            }
-
-            spark.user = doc;
-
-            spark.emit('loggedIn', doc);
-
-            gameDB.findOne({ userId: spark.user.userId }, function (err, doc) {
-                if (doc) {
-                    return spark.emit('updateGame', doc);
+        app(DB)
+            .with(spark)
+            .on('login')
+            .findUser(
+                function() {
+                    return {userId: userId};
+                },
+                function(user) {
+                    this.user = user;
                 }
-            });
-        });
+            )
+            .findGame(
+                function() {
+                    if (!this.user) {
+                        return;
+                    }
+
+                    return {userId: this.user.userId};
+                },
+                function(game) {
+                    this.game = game;
+                }
+            )
+            .sendEvent(function(send) {
+                if (!this.user) {
+                    return send('wrongUserId');
+                }
+
+                send('loggedIn', this.user);
+            })
+            .sendEvent(function(send) {
+                if (this.game) {
+                    send('updateGame', this.game);
+                }
+            })
+            .end()
     });
     spark.on('action', function (gameId, action) {
         if (!spark.user) {
